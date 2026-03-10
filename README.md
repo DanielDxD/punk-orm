@@ -121,9 +121,15 @@ await ctx.users.saveChanges();
 ### 4. Fluent Query Builder (LINQ-inspired)
 
 ```ts
+// Eager Loading (Joins)
+const postsWithAuthor = await ctx.posts
+    .include("author")
+    .where((p) => p.views.gt(100))
+    .toList();
+
 // Complex filtering with projections
 const topPosts = await ctx.posts
-    .asQueryable()
+    .asQuery()
     .where((p) => p.views.gt(100).and(p.title.contains("Punk")))
     .orderByDescending((p) => p.views)
     .select((p) => ({ id: p.id, title: p.title })) // Optimized projection
@@ -198,7 +204,12 @@ bun punk status
 | `add(entity)`          | Stages INSERT                                 |
 | `update(entity)`       | Stages UPDATE                                 |
 | `remove(entity)`       | Stages DELETE                                 |
+| `bulkInsert(entities)` | Immediate high-performance INSERT             |
+| `bulkUpdate(entities)` | Immediate high-performance UPDATE (CASE)      |
+| `bulkDelete(entities)` | Immediate high-performance DELETE (IN)        |
 | `saveChanges()`        | Flushes all staged changes in a transaction   |
+| `include(relation)`    | Joins a relation (Eager Loading)              |
+| `asQuery()`            | Starts a fluent query chain                   |
 | `createQueryBuilder()` | Returns a `QueryBuilder` scoped to this table |
 
 ---
