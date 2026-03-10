@@ -10,7 +10,7 @@ export default tseslint.config(
     eslintConfigPrettier,
     {
         rules: {
-            quotes: ["error", "double"],
+            quotes: ["error", "double", { avoidEscape: true }],
             semi: ["error", "always"],
             "@typescript-eslint/interface-name-prefix": "off",
             "@typescript-eslint/explicit-function-return-type": "off",
