@@ -1,16 +1,40 @@
 {
     "name": "@danielgl/punk-orm",
-    "version": "1.0.0",
-    "module": "src/index.ts",
+    "version": "1.0.1",
+    "description": "An Entity Framework-inspired ORM for Bun supporting SQLite, Postgres, MySQL and MSSQL.",
+    "author": "Daniel Lopes",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DanielDxD/punk-orm"
+    },
+    "keywords": [
+        "orm",
+        "bun",
+        "sqlite",
+        "postgres",
+        "mysql",
+        "mssql",
+        "entityframework",
+        "linq"
+    ],
+    "main": "./dist/src/index.js",
+    "module": "./dist/src/index.js",
+    "types": "./dist/src/index.d.ts",
     "type": "module",
     "bin": {
-        "punk": "./bin/punk.ts"
+        "punk": "./dist/bin/punk.js"
     },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
     "scripts": {
         "dev": "bun run examples/basic.ts",
         "test": "bun test",
-        "build": "bun build src/index.ts --outdir dist --target bun",
-        "punk": "bun bin/punk.ts",
+        "build": "rm -rf dist && bun build src/index.ts --outdir dist/src --target bun --external reflect-metadata && bun build bin/punk.ts --outdir dist/bin --target bun --external reflect-metadata && tsc -p tsconfig.build.json",
+        "punk": "bun ./bin/punk.ts",
         "lint": "eslint \"{src,tests,example}/**/*.ts\"",
         "lint:fix": "eslint \"{src,tests,example}/**/*.ts\" --fix",
         "format:check": "prettier --check \"{src,tests,example}/**/*.ts\"",
