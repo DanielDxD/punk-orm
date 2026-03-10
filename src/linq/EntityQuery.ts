@@ -54,7 +54,7 @@ export class EntityQuery<T extends object> {
     // ── Fluent (lazy) methods ──────────────────────────────────────────────────
 
     public where(fn: WhereFn<T>): this {
-        const expr = new WhereExpression<T>();
+        const expr = new WhereExpression<T>(this.db);
         fn(expr);
         const { sql, params } = expr.build();
         if (sql) this._wheres.push({ sql, params });
@@ -190,25 +190,25 @@ export class EntityQuery<T extends object> {
     }
 
     public async sum(field: StringKeys<T>): Promise<number> {
-        const { sql, params } = this.buildSQL(`SUM(${field}) as n`);
+        const { sql, params } = this.buildSQL(`SUM(${this.db.quote(field)}) as n`);
         const rows = await this.db.query<{ n: number }>(sql, params);
         return rows[0]?.n ?? 0;
     }
 
     public async min(field: StringKeys<T>): Promise<number> {
-        const { sql, params } = this.buildSQL(`MIN(${field}) as n`);
+        const { sql, params } = this.buildSQL(`MIN(${this.db.quote(field)}) as n`);
         const rows = await this.db.query<{ n: number }>(sql, params);
         return rows[0]?.n ?? 0;
     }
 
     public async max(field: StringKeys<T>): Promise<number> {
-        const { sql, params } = this.buildSQL(`MAX(${field}) as n`);
+        const { sql, params } = this.buildSQL(`MAX(${this.db.quote(field)}) as n`);
         const rows = await this.db.query<{ n: number }>(sql, params);
         return rows[0]?.n ?? 0;
     }
 
     public async average(field: StringKeys<T>): Promise<number> {
-        const { sql, params } = this.buildSQL(`AVG(${field}) as n`);
+        const { sql, params } = this.buildSQL(`AVG(${this.db.quote(field)}) as n`);
         const rows = await this.db.query<{ n: number }>(sql, params);
         return rows[0]?.n ?? 0;
     }
@@ -216,14 +216,16 @@ export class EntityQuery<T extends object> {
     // ── SQL generation ─────────────────────────────────────────────────────────
 
     private async executeSelect(): Promise<Array<Record<string, unknown>>> {
-        const selectExpr = this._selectedColumns.join(", ");
+        const selectExpr = this._selectedColumns
+            .map((c) => (c === "*" ? c : this.db.quote(c)))
+            .join(", ");
         const { sql, params } = this.buildSQL(selectExpr);
         return this.db.query<Record<string, unknown>>(sql, params);
     }
 
     private buildSQL(selectExpr: string): { sql: string; params: Array<unknown> } {
         const params: Array<unknown> = [];
-        let sql = `SELECT ${selectExpr} FROM ${this.tableName}`;
+        let sql = `SELECT ${selectExpr} FROM ${this.db.quote(this.tableName)}`;
 
         if (this._wheres.length > 0) {
             const parts = this._wheres.map((w) => {
@@ -235,7 +237,7 @@ export class EntityQuery<T extends object> {
 
         // Only add ORDER BY for set-returning queries or explicitly requested
         if (this._orders.length > 0) {
-            const orderParts = this._orders.map((o) => `${o.field} ${o.dir}`);
+            const orderParts = this._orders.map((o) => `${this.db.quote(o.field)} ${o.dir}`);
             sql += ` ORDER BY ${orderParts.join(", ")}`;
         }
 

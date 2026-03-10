@@ -56,7 +56,7 @@ export class DbSet<T extends object> {
 
         if (options?.where) {
             for (const [key, value] of Object.entries(options.where)) {
-                qb.where(`${key} = ?`, [value]);
+                qb.where(`${this.db.quote(key)} = ?`, [value]);
             }
         }
 
@@ -227,12 +227,12 @@ export class DbSet<T extends object> {
                 record[col.propertyKey] = col.default;
             }
 
-            colNames.push(col.columnName);
+            colNames.push(this.db.quote(col.columnName));
             colValues.push(record[col.propertyKey] ?? null);
         }
 
         const placeholders = colNames.map(() => "?").join(", ");
-        const sql = `INSERT INTO ${this.tableName} (${colNames.join(", ")}) VALUES (${placeholders})`;
+        const sql = `INSERT INTO ${this.db.quote(this.tableName)} (${colNames.join(", ")}) VALUES (${placeholders})`;
         await this.db.run(sql, colValues);
     }
 
@@ -250,12 +250,12 @@ export class DbSet<T extends object> {
 
         for (const col of columns) {
             if (col.isPrimary) continue;
-            setClauses.push(`${col.columnName} = ?`);
+            setClauses.push(`${this.db.quote(col.columnName)} = ?`);
             setValues.push(record[col.propertyKey] ?? null);
         }
 
         setValues.push(record[pkCol.propertyKey]);
-        const sql = `UPDATE ${this.tableName} SET ${setClauses.join(", ")} WHERE ${pkCol.columnName} = ?`;
+        const sql = `UPDATE ${this.db.quote(this.tableName)} SET ${setClauses.join(", ")} WHERE ${this.db.quote(pkCol.columnName)} = ?`;
         await this.db.run(sql, setValues);
     }
 
@@ -267,7 +267,7 @@ export class DbSet<T extends object> {
         if (!pkCol) throw new Error(`Entity "${this.entityTarget.name}" has no primary key.`);
 
         const record = entity as Record<string, unknown>;
-        const sql = `DELETE FROM ${this.tableName} WHERE ${pkCol.columnName} = ?`;
+        const sql = `DELETE FROM ${this.db.quote(this.tableName)} WHERE ${this.db.quote(pkCol.columnName)} = ?`;
         await this.db.run(sql, [record[pkCol.propertyKey]]);
     }
 

@@ -1,6 +1,6 @@
 {
     "name": "@danielgl/punk-orm",
-    "version": "1.0.2",
+    "version": "1.0.6",
     "description": "An Entity Framework-inspired ORM for Bun supporting SQLite, Postgres, MySQL and MSSQL.",
     "author": "Daniel Lopes",
     "license": "MIT",
@@ -33,7 +33,7 @@
     "scripts": {
         "dev": "bun run examples/basic.ts",
         "test": "bun test",
-        "build": "rm -rf dist && bun build src/index.ts --outdir dist/src --target bun --external reflect-metadata && bun build bin/punk.ts --outdir dist/bin --target bun --external reflect-metadata && tsc -p tsconfig.build.json",
+        "build": "rm -rf dist && bun build src/index.ts --outdir dist/src --target bun --external reflect-metadata --external postgres --external mysql2 --external mssql && bun build bin/punk.ts --outdir dist/bin --target bun --external reflect-metadata --external postgres --external mysql2 --external mssql && tsc -p tsconfig.build.json",
         "punk": "bun ./bin/punk.ts",
         "lint": "eslint \"{src,tests,example}/**/*.ts\"",
         "lint:fix": "eslint \"{src,tests,example}/**/*.ts\" --fix",
@@ -42,6 +42,7 @@
         "prepare": "husky"
     },
     "dependencies": {
+        "postgres": "^3.4.8",
         "reflect-metadata": "^0.2.2"
     },
     "devDependencies": {

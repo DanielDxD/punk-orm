@@ -6,12 +6,12 @@
  */
 import "reflect-metadata";
 import {
-    BunSQLiteAdapter,
     Column,
     DataContext,
     Entity,
     ManyToOne,
     OneToMany,
+    PostgresAdapter,
     PrimaryGeneratedColumn
 } from "./index.ts";
 import { Logger } from "./utils/logger.ts";
@@ -68,10 +68,13 @@ export class AppContext extends DataContext {
 }
 
 async function demo() {
-    const context = new AppContext(new BunSQLiteAdapter("./app.db"), {
-        autoMigrations: false,
-        logging: ["info", "query", "schema"]
-    });
+    const context = new AppContext(
+        new PostgresAdapter("postgres://postgres:postgres@localhost:5432/test"),
+        {
+            autoMigrations: false,
+            logging: ["info", "query", "schema"]
+        }
+    );
 
     const user = await context.users
         .where((c) => c.eq("email", "example@example.com"))

@@ -91,7 +91,9 @@ export abstract class DataContext {
                 }
             },
             transaction: (fn: () => Promise<void>) => adapter.transaction(fn),
-            close: () => adapter.close()
+            close: () => adapter.close(),
+            quote: (identifier: string) => adapter.quote(identifier),
+            ensureDatabaseExists: () => adapter.ensureDatabaseExists()
         };
     }
 
@@ -100,6 +102,7 @@ export abstract class DataContext {
      * Call this once on app startup before performing any queries.
      */
     public async initialize(): Promise<void> {
+        await this.db.ensureDatabaseExists();
         if (this.options.autoMigrations) {
             const runner = new MigrationRunner(this.db);
             await runner.run();

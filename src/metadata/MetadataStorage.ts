@@ -80,5 +80,11 @@ class MetadataStorage {
     }
 }
 
-// Global singleton
-export const metadataStorage = new MetadataStorage();
+// Global singleton using globalThis to avoid multiple instances in bundled environments
+const GLOBAL_KEY = "__PUNK_ORM_METADATA_STORAGE__";
+
+if (!(globalThis as any)[GLOBAL_KEY]) {
+    (globalThis as any)[GLOBAL_KEY] = new MetadataStorage();
+}
+
+export const metadataStorage: MetadataStorage = (globalThis as any)[GLOBAL_KEY];

@@ -53,6 +53,34 @@ export class PostgresAdapter implements IDatabaseAdapter {
         }
     }
 
+    public quote(identifier: string): string {
+        return `"${identifier}"`;
+    }
+
+    public async ensureDatabaseExists(): Promise<void> {
+        const url = new URL(this.connectionString);
+        const targetDb = url.pathname.slice(1);
+        if (!targetDb || targetDb === "postgres") return;
+
+        // Connect to maintenance database 'postgres' to check/create the target db
+        url.pathname = "/postgres";
+        const maintenanceString = url.toString();
+
+        const { default: postgres } = await import("postgres" as any);
+        const sql = postgres(maintenanceString, { ...this.options, max: 1 });
+
+        try {
+            const exists = await sql`SELECT 1 FROM pg_database WHERE datname = ${targetDb}`;
+            if (exists.length === 0) {
+                // CREATE DATABASE cannot run inside a transaction or with parameters in some drivers,
+                // but postgres.js allows it via unsafe if needed.
+                await sql.unsafe(`CREATE DATABASE "${targetDb.replace(/"/g, '""')}"`);
+            }
+        } finally {
+            await sql.end();
+        }
+    }
+
     private async ensureConnected() {
         if (!this.sql) {
             try {

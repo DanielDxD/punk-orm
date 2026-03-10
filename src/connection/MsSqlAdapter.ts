@@ -71,6 +71,31 @@ export class MsSqlAdapter implements IDatabaseAdapter {
         }
     }
 
+    public quote(identifier: string): string {
+        return `[${identifier}]`;
+    }
+
+    public async ensureDatabaseExists(): Promise<void> {
+        const dbName = this.config.database;
+        if (!dbName) return;
+
+        await this.ensureConnected();
+        const mssql = await import("mssql" as any);
+        // Connect to master database to check/create target
+        const masterConfig = { ...this.config, database: "master" };
+        const pool = new mssql.ConnectionPool(masterConfig);
+        await pool.connect();
+
+        try {
+            await pool.request().query(
+                `IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '${dbName}')
+                 CREATE DATABASE [${dbName}]`
+            );
+        } finally {
+            await pool.close();
+        }
+    }
+
     private async ensureConnected() {
         if (!this.mssql) {
             try {

@@ -13,13 +13,13 @@
  *   bun bin/punk.ts flush migrations
  *   bun bin/punk.ts status
  */
-import { BunSQLiteAdapter } from "./src/index.ts";
+import { PostgresAdapter } from "./src/index.ts";
 
 // Import your entity files to register them in MetadataStorage.
 // Any file containing @Entity decorators must be imported here.
 import "./src/main.ts";
 
 export default {
-    adapter: new BunSQLiteAdapter("./app.db"),
+    adapter: new PostgresAdapter("postgres://postgres:postgres@localhost:5432/test"),
     migrationsDir: "./migrations",
 };

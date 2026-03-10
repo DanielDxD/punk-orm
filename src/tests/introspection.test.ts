@@ -23,6 +23,12 @@ class MockAdapter implements IDatabaseAdapter {
     public close(): void {
         /* empty */
     }
+    public quote(identifier: string): string {
+        if (this.dialect === "postgres") return `"${identifier}"`;
+        if (this.dialect === "mysql") return `\`${identifier}\``;
+        if (this.dialect === "mssql") return `[${identifier}]`;
+        return identifier;
+    }
 }
 
 describe("SchemaDiffer Introspection", () => {

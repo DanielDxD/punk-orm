@@ -19,6 +19,12 @@ class MockAdapter implements IDatabaseAdapter {
     public close(): void {
         /* empty */
     }
+    public quote(identifier: string): string {
+        return identifier;
+    }
+    public async ensureDatabaseExists(): Promise<void> {
+        /* empty */
+    }
 }
 
 class TestContext extends DataContext {}

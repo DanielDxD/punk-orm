@@ -178,6 +178,8 @@ async function generateMigration(config: PunkConfig, name: string) {
     const adapter = config.adapter;
     const migrationsDir = path.resolve(config.migrationsDir!);
 
+    await adapter.ensureDatabaseExists();
+
     Logger.info("Diffing schema against database...", "CLI");
 
     // Compute diff once — reuse for isInSync, generateSQL, and summary display

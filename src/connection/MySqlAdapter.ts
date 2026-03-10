@@ -55,6 +55,28 @@ export class MySqlAdapter implements IDatabaseAdapter {
         }
     }
 
+    public quote(identifier: string): string {
+        return `\`${identifier}\``;
+    }
+
+    public async ensureDatabaseExists(): Promise<void> {
+        const dbName = this.options.database;
+        if (!dbName) return;
+
+        const mysql = await import("mysql2/promise" as any);
+        // Connect without a database to check/create it
+        const connection = await mysql.createConnection({
+            ...this.options,
+            database: undefined
+        });
+
+        try {
+            await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+        } finally {
+            await connection.end();
+        }
+    }
+
     private async ensureConnected() {
         if (!this.connection) {
             try {

@@ -12,18 +12,20 @@ export class SchemaBuilder {
         let sql: string;
 
         switch (this.db.dialect) {
-            case "postgres":
-                sql = `CREATE TABLE IF NOT EXISTS "${meta.tableName}" (\n  ${columnDefs.join(",\n  ")}\n);`;
-                break;
-            case "mysql":
-                sql = `CREATE TABLE IF NOT EXISTS \`${meta.tableName}\` (\n  ${columnDefs.join(",\n  ")}\n);`;
-                break;
             case "mssql":
-                sql = `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='${meta.tableName}' AND xtype='U')\nCREATE TABLE [${meta.tableName}] (\n  ${columnDefs.join(",\n  ")}\n);`;
+                sql = `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='${
+                    meta.tableName
+                }' AND xtype='U')\nCREATE TABLE ${this.db.quote(meta.tableName)} (\n  ${columnDefs.join(
+                    ",\n  "
+                )}\n);`;
                 break;
+            case "postgres":
+            case "mysql":
             case "sqlite":
             default:
-                sql = `CREATE TABLE IF NOT EXISTS ${meta.tableName} (\n  ${columnDefs.join(",\n  ")}\n);`;
+                sql = `CREATE TABLE IF NOT EXISTS ${this.db.quote(
+                    meta.tableName
+                )} (\n  ${columnDefs.join(",\n  ")}\n);`;
                 break;
         }
         await this.db.run(sql);
@@ -33,24 +35,17 @@ export class SchemaBuilder {
         const type = this.getDialectType(col);
         let def: string;
 
-        const quote = (s: string) => {
-            if (this.db.dialect === "postgres") return `"${s}"`;
-            if (this.db.dialect === "mysql") return `\`${s}\``;
-            if (this.db.dialect === "mssql") return `[${s}]`;
-            return s;
-        };
-
-        def = `${quote(col.columnName)} ${type}`;
+        def = `${this.db.quote(col.columnName)} ${type}`;
 
         // Handle Identity/Auto-increment
         if (col.isGenerated && col.generationStrategy === "increment") {
             switch (this.db.dialect) {
                 case "sqlite":
                     if (col.isPrimary)
-                        return `${quote(col.columnName)} INTEGER PRIMARY KEY AUTOINCREMENT`;
+                        return `${this.db.quote(col.columnName)} INTEGER PRIMARY KEY AUTOINCREMENT`;
                     break;
                 case "postgres":
-                    return `${quote(col.columnName)} SERIAL PRIMARY KEY`;
+                    return `${this.db.quote(col.columnName)} SERIAL PRIMARY KEY`;
                 case "mysql":
                     def += " AUTO_INCREMENT";
                     break;

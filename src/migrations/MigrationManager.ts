@@ -34,13 +34,48 @@ export class MigrationManager {
     // ── Bootstrap ──────────────────────────────────────────────────────────────
 
     public async ensureTable(): Promise<void> {
-        await this.db.run(`
-      CREATE TABLE IF NOT EXISTS _punk_migrations (
-        id      INTEGER PRIMARY KEY AUTOINCREMENT,
-        name    TEXT    UNIQUE NOT NULL,
-        ran_at  TEXT    NOT NULL
-      )
-    `);
+        let sql: string;
+        switch (this.db.dialect) {
+            case "postgres":
+                sql = `
+          CREATE TABLE IF NOT EXISTS _punk_migrations (
+            id      SERIAL PRIMARY KEY,
+            name    TEXT    UNIQUE NOT NULL,
+            ran_at  TEXT    NOT NULL
+          )
+        `;
+                break;
+            case "mysql":
+                sql = `
+          CREATE TABLE IF NOT EXISTS _punk_migrations (
+            id      INT PRIMARY KEY AUTO_INCREMENT,
+            name    VARCHAR(255) UNIQUE NOT NULL,
+            ran_at  VARCHAR(255) NOT NULL
+          )
+        `;
+                break;
+            case "mssql":
+                sql = `
+          IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='_punk_migrations' AND xtype='U')
+          CREATE TABLE _punk_migrations (
+            id      INT PRIMARY KEY IDENTITY(1,1),
+            name    NVARCHAR(255) UNIQUE NOT NULL,
+            ran_at  NVARCHAR(255) NOT NULL
+          )
+        `;
+                break;
+            case "sqlite":
+            default:
+                sql = `
+          CREATE TABLE IF NOT EXISTS _punk_migrations (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            name    TEXT    UNIQUE NOT NULL,
+            ran_at  TEXT    NOT NULL
+          )
+        `;
+                break;
+        }
+        await this.db.run(sql);
     }
 
     // ── Introspection ──────────────────────────────────────────────────────────

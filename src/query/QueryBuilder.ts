@@ -122,20 +122,12 @@ export class QueryBuilder {
 
     public buildSelectSQL(): { sql: string; params: Array<unknown> } {
         const params: Array<unknown> = [];
-        const dialect = this.db.dialect;
 
-        const quote = (s: string) => {
-            if (dialect === "postgres") return `"${s}"`;
-            if (dialect === "mysql") return `\`${s}\``;
-            if (dialect === "mssql") return `[${s}]`;
-            return s;
-        };
-
-        const selectExpr = this._select.map((s) => (s === "*" ? s : quote(s))).join(", ");
-        let sql = `SELECT ${selectExpr} FROM ${quote(this._from)}`;
+        const selectExpr = this._select.map((s) => (s === "*" ? s : this.db.quote(s))).join(", ");
+        let sql = `SELECT ${selectExpr} FROM ${this.db.quote(this._from)}`;
 
         for (const join of this._joins) {
-            sql += ` ${join.type} JOIN ${quote(join.table)} ON ${join.on}`;
+            sql += ` ${join.type} JOIN ${this.db.quote(join.table)} ON ${join.on}`;
         }
 
         if (this._wheres.length > 0) {
@@ -151,7 +143,7 @@ export class QueryBuilder {
         }
 
         if (this._limit !== undefined) {
-            if (dialect === "mssql") {
+            if (this.db.dialect === "mssql") {
                 // MSSQL OFFSET/FETCH requires ORDER BY
                 if (this._orderBys.length === 0) {
                     sql += " ORDER BY (SELECT NULL)";
@@ -162,21 +154,12 @@ export class QueryBuilder {
                 if (this._offset !== undefined) sql += ` OFFSET ${this._offset}`;
             }
         } else if (this._offset !== undefined) {
-            if (dialect === "mssql") {
+            if (this.db.dialect === "mssql") {
                 if (this._orderBys.length === 0) sql += " ORDER BY (SELECT NULL)";
                 sql += ` OFFSET ${this._offset} ROWS`;
             } else {
                 sql += ` OFFSET ${this._offset}`;
             }
-        }
-
-        // Adjust placeholders for Postgres and MSSQL
-        if (dialect === "postgres") {
-            let i = 1;
-            sql = sql.replace(/\?/g, () => `$${i++}`);
-        } else if (dialect === "mssql") {
-            let i = 1;
-            sql = sql.replace(/\?/g, () => `@p${i++}`);
         }
 
         return { sql, params };

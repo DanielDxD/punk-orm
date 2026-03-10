@@ -95,15 +95,19 @@ export class SchemaDiffer {
                         const pk = refEntity.columns.find((c) => c.isPrimary);
                         const refCol = pk?.columnName ?? "id";
                         fkLines.push(
-                            `FOREIGN KEY (${rel.foreignKey}) REFERENCES ${refEntity.tableName}(${refCol})`
+                            `FOREIGN KEY (${this.db.quote(rel.foreignKey)}) REFERENCES ${this.db.quote(
+                                refEntity.tableName
+                            )}(${this.db.quote(refCol)})`
                         );
                     }
                 }
             }
 
             const allDefs = [...cols, ...fkLines];
-            const up = `CREATE TABLE IF NOT EXISTS ${meta.tableName} (\n    ${allDefs.join(",\n    ")}\n  )`;
-            const down = `DROP TABLE IF EXISTS ${meta.tableName}`;
+            const up = `CREATE TABLE IF NOT EXISTS ${this.db.quote(
+                meta.tableName
+            )} (\n    ${allDefs.join(",\n    ")}\n  )`;
+            const down = `DROP TABLE IF EXISTS ${this.db.quote(meta.tableName)}`;
             upStatements.push(up);
             // Reverse order for down so FK references are dropped first
             downStatements.unshift(down);
@@ -116,15 +120,29 @@ export class SchemaDiffer {
                 // ALTER TABLE ADD COLUMN cannot be NOT NULL without DEFAULT
                 nullable: column.default === undefined ? true : column.nullable
             });
-            upStatements.push(`ALTER TABLE ${entity.tableName} ADD COLUMN ${colDef}`);
-            downStatements.push(`ALTER TABLE ${entity.tableName} DROP COLUMN ${column.columnName}`);
+            upStatements.push(
+                `ALTER TABLE ${this.db.quote(entity.tableName)} ADD COLUMN ${colDef}`
+            );
+            downStatements.push(
+                `ALTER TABLE ${this.db.quote(entity.tableName)} DROP COLUMN ${this.db.quote(
+                    column.columnName
+                )}`
+            );
         }
 
         // ── Dropped columns ─────────────────────────────────────────────────────
         for (const { entity, columnName } of d.columnsToDrop) {
-            upStatements.push(`ALTER TABLE ${entity.tableName} DROP COLUMN ${columnName}`);
+            upStatements.push(
+                `ALTER TABLE ${this.db.quote(entity.tableName)} DROP COLUMN ${this.db.quote(
+                    columnName
+                )}`
+            );
             // Best-effort restore as nullable TEXT (type info is lost at this point)
-            downStatements.push(`ALTER TABLE ${entity.tableName} ADD COLUMN ${columnName} TEXT`);
+            downStatements.push(
+                `ALTER TABLE ${this.db.quote(entity.tableName)} ADD COLUMN ${this.db.quote(
+                    columnName
+                )} TEXT`
+            );
         }
 
         return { upStatements, downStatements };

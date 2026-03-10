@@ -18,6 +18,22 @@ class MockAdapter implements IDatabaseAdapter {
     public close(): void {
         /* empty */
     }
+    public quote(identifier: string): string {
+        switch (this.dialect) {
+            case "postgres":
+                return `"${identifier}"`;
+            case "mysql":
+                return `\`${identifier}\``;
+            case "mssql":
+                return `[${identifier}]`;
+            case "sqlite":
+            default:
+                return identifier;
+        }
+    }
+    public async ensureDatabaseExists(): Promise<void> {
+        /* empty */
+    }
 }
 
 const mockMeta: EntityMetadata = {

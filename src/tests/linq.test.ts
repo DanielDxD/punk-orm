@@ -109,42 +109,52 @@ afterAll(() => ctx.close());
 
 describe("WhereExpression", () => {
     it("eq() builds equality clause", () => {
-        const expr = new WhereExpression<User>().eq("name", "Alice");
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb).eq("name", "Alice");
         const { sql, params } = expr.build();
         expect(sql).toBe("name = ?");
         expect(params).toEqual(["Alice"]);
     });
 
     it("gt() + lte() chain with AND", () => {
-        const expr = new WhereExpression<User>().gt("score", 50 as never).lte("score", 90 as never);
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb)
+            .gt("score", 50 as never)
+            .lte("score", 90 as never);
         const { sql, params } = expr.build();
         expect(sql).toBe("score > ? AND score <= ?");
         expect(params).toEqual([50, 90]);
     });
 
     it("contains() uses LIKE %value%", () => {
-        const expr = new WhereExpression<User>().contains("name", "li");
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb).contains("name", "li");
         const { sql, params } = expr.build();
         expect(sql).toBe("name LIKE ?");
         expect(params).toEqual(["%li%"]);
     });
 
     it("in() builds IN clause", () => {
-        const expr = new WhereExpression<User>().in("name", ["Alice", "Bob"]);
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb).in("name", ["Alice", "Bob"]);
         const { sql, params } = expr.build();
         expect(sql).toBe("name IN (?, ?)");
         expect(params).toEqual(["Alice", "Bob"]);
     });
 
     it("or() builds grouped OR clause", () => {
-        const expr = new WhereExpression<User>().eq("name", "Alice").or((q) => q.eq("name", "Bob"));
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb)
+            .eq("name", "Alice")
+            .or((q) => q.eq("name", "Bob"));
         const { sql, params } = expr.build();
         expect(sql).toBe("name = ? OR (name = ?)");
         expect(params).toEqual(["Alice", "Bob"]);
     });
 
     it("and() builds grouped AND clause", () => {
-        const expr = new WhereExpression<User>()
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb)
             .eq("active", true as never)
             .and((q) => q.gt("score", 50 as never));
         const { sql, params } = expr.build();
@@ -153,22 +163,25 @@ describe("WhereExpression", () => {
     });
 
     it("isNull() / isNotNull()", () => {
-        const e1 = new WhereExpression<User>().isNull("name");
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const e1 = new WhereExpression<User>(mockDb).isNull("name");
         expect(e1.build().sql).toBe("name IS NULL");
 
-        const e2 = new WhereExpression<User>().isNotNull("name");
+        const e2 = new WhereExpression<User>(mockDb).isNotNull("name");
         expect(e2.build().sql).toBe("name IS NOT NULL");
     });
 
     it("between() builds BETWEEN clause", () => {
-        const expr = new WhereExpression<User>().between("score", 40 as never, 90 as never);
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb).between("score", 40 as never, 90 as never);
         const { sql, params } = expr.build();
         expect(sql).toBe("score BETWEEN ? AND ?");
         expect(params).toEqual([40, 90]);
     });
 
     it("in() with empty array returns always-false clause", () => {
-        const expr = new WhereExpression<User>().in("name", []);
+        const mockDb: any = { quote: (s: string) => s, dialect: "sqlite" };
+        const expr = new WhereExpression<User>(mockDb).in("name", []);
         expect(expr.build().sql).toBe("1 = 0");
     });
 });

@@ -48,6 +48,14 @@ export class BunSQLiteAdapter implements IDatabaseAdapter {
         this.db.close();
     }
 
+    public quote(identifier: string): string {
+        return identifier;
+    }
+
+    public async ensureDatabaseExists(): Promise<void> {
+        // SQLite creates the file automatically on connection
+    }
+
     /** Expose the raw Database instance for advanced use */
     public get raw(): Database {
         return this.db;

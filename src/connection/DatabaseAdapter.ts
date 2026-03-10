@@ -18,4 +18,10 @@ export interface IDatabaseAdapter {
 
     /** Close the connection */
     close(): void;
+
+    /** Quote an identifier (table or column name) based on the dialect */
+    quote(identifier: string): string;
+
+    /** Ensure the database exists, creating it if necessary */
+    ensureDatabaseExists(): Promise<void>;
 }
