@@ -115,6 +115,10 @@ export class DbSet<T extends object> {
         return this.asQuery().take(n);
     }
 
+    public include(relation: StringKeys<T>): EntityQuery<T> {
+        return this.asQuery().include(relation);
+    }
+
     public async toList(): Promise<Array<T>> {
         return this.asQuery().toList();
     }
@@ -186,6 +190,116 @@ export class DbSet<T extends object> {
 
     public remove(entity: T): void {
         this.pending.push({ type: "delete", entity });
+    }
+
+    public async bulkInsert(entities: Array<T>): Promise<void> {
+        if (entities.length === 0) return;
+
+        const columns = metadataStorage.getColumns(
+            this.entityTarget as unknown as Constructor<unknown>
+        );
+        const chunkSize = 500; // Safe floor for most dialects
+
+        for (let i = 0; i < entities.length; i += chunkSize) {
+            const chunk = entities.slice(i, i + chunkSize);
+            const colNames: Array<string> = [];
+            const valuePlaceholders: Array<string> = [];
+            const allValues: Array<unknown> = [];
+
+            // Identify columns to include (skip incremented PKs)
+            const activeCols = columns.filter(
+                (col) => !(col.isGenerated && col.generationStrategy === "increment")
+            );
+            colNames.push(...activeCols.map((col) => this.db.quote(col.columnName)));
+
+            for (const entity of chunk) {
+                const record = entity as Record<string, unknown>;
+                const rowPlaceholders: Array<string> = [];
+
+                for (const col of activeCols) {
+                    if (col.isGenerated && col.generationStrategy === "uuid") {
+                        record[col.propertyKey] ||= randomUUIDv7();
+                    }
+                    if (record[col.propertyKey] === undefined && col.default !== undefined) {
+                        record[col.propertyKey] = col.default;
+                    }
+                    rowPlaceholders.push("?");
+                    allValues.push(record[col.propertyKey] ?? null);
+                }
+                valuePlaceholders.push(`(${rowPlaceholders.join(", ")})`);
+            }
+
+            const sql = `INSERT INTO ${this.db.quote(
+                this.tableName
+            )} (${colNames.join(", ")}) VALUES ${valuePlaceholders.join(", ")}`;
+            await this.db.run(sql, allValues);
+        }
+    }
+
+    public async bulkUpdate(entities: Array<T>): Promise<void> {
+        if (entities.length === 0) return;
+
+        const columns = metadataStorage.getColumns(
+            this.entityTarget as unknown as Constructor<unknown>
+        );
+        const pkCol = columns.find((c) => c.isPrimary);
+        if (!pkCol) throw new Error(`Entity "${this.entityTarget.name}" has no primary key.`);
+
+        const chunkSize = 100; // CASE statements can get large
+        for (let i = 0; i < entities.length; i += chunkSize) {
+            const chunk = entities.slice(i, i + chunkSize);
+            const updateCols = columns.filter((c) => !c.isPrimary);
+            const setClauses: Array<string> = [];
+            const allParams: Array<unknown> = [];
+
+            for (const col of updateCols) {
+                let caseSql = `${this.db.quote(col.columnName)} = CASE `;
+                for (const entity of chunk) {
+                    const record = entity as Record<string, unknown>;
+                    caseSql += `WHEN ${this.db.quote(pkCol.columnName)} = ? THEN ? `;
+                    allParams.push(record[pkCol.propertyKey], record[col.propertyKey] ?? null);
+                }
+                caseSql += `ELSE ${this.db.quote(col.columnName)} END`;
+                setClauses.push(caseSql);
+            }
+
+            const pkValues = chunk.map((e) => (e as Record<string, unknown>)[pkCol.propertyKey]);
+            const placeholders = pkValues.map(() => "?").join(", ");
+            allParams.push(...pkValues);
+
+            const sql = `UPDATE ${this.db.quote(this.tableName)} SET ${setClauses.join(
+                ", "
+            )} WHERE ${this.db.quote(pkCol.columnName)} IN (${placeholders})`;
+
+            await this.db.run(sql, allParams);
+        }
+    }
+
+    public async bulkDelete(entities: Array<T | any>): Promise<void> {
+        if (entities.length === 0) return;
+
+        const columns = metadataStorage.getColumns(
+            this.entityTarget as unknown as Constructor<unknown>
+        );
+        const pkCol = columns.find((c) => c.isPrimary);
+        if (!pkCol) throw new Error(`Entity "${this.entityTarget.name}" has no primary key.`);
+
+        const ids = entities.map((e) => {
+            if (typeof e === "object" && e !== null && pkCol.propertyKey in e) {
+                return (e as Record<string, unknown>)[pkCol.propertyKey];
+            }
+            return e;
+        });
+
+        const chunkSize = 1000;
+        for (let i = 0; i < ids.length; i += chunkSize) {
+            const chunk = ids.slice(i, i + chunkSize);
+            const placeholders = chunk.map(() => "?").join(", ");
+            const sql = `DELETE FROM ${this.db.quote(this.tableName)} WHERE ${this.db.quote(
+                pkCol.columnName
+            )} IN (${placeholders})`;
+            await this.db.run(sql, chunk);
+        }
     }
 
     public async saveChanges(): Promise<void> {

@@ -11,10 +11,31 @@ export class MySqlAdapter implements IDatabaseAdapter {
     private connection: any;
 
     /**
-     * @param options Connection options for mysql2
+     * @param options Connection options for mysql2 or a connection string
      */
     public constructor(options: any) {
-        this.options = options;
+        if (typeof options === "string") {
+            this.options = this.parseConnectionString(options);
+        } else {
+            this.options = options;
+        }
+    }
+
+    private parseConnectionString(connectionString: string): any {
+        try {
+            const url = new URL(connectionString);
+            return {
+                host: url.hostname,
+                port: url.port ? parseInt(url.port) : 3306,
+                user: url.username,
+                password: url.password,
+                database: url.pathname.slice(1)
+            };
+        } catch {
+            // Fallback for non-URL strings if needed, or just let mysql2 handle it if possible.
+            // But here we need to extract 'database' for ensureDatabaseExists.
+            return { uri: connectionString };
+        }
     }
 
     public async run(sql: string, params: Array<unknown> = []): Promise<void> {

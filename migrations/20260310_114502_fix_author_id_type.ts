@@ -1,7 +1,7 @@
 import type { IDatabaseAdapter } from "../src/index.ts";
 import { Migration } from "../src/index.ts";
 
-export class TestAutoCreate extends Migration {
+export class FixAuthorIdType extends Migration {
   public async up(db: IDatabaseAdapter): Promise<void> {
     await db.run(`CREATE TABLE IF NOT EXISTS "users" (
     "id" UUID PRIMARY KEY,
@@ -15,7 +15,7 @@ export class TestAutoCreate extends Migration {
     "title" TEXT NOT NULL,
     "body" TEXT,
     "views" INTEGER NOT NULL DEFAULT 0,
-    "authorId" TEXT NOT NULL,
+    "authorId" UUID NOT NULL,
     FOREIGN KEY ("authorId") REFERENCES "users"("id")
   )`);
   }

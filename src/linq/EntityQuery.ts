@@ -1,4 +1,5 @@
 import type { IDatabaseAdapter } from "../connection/DatabaseAdapter.ts";
+import { metadataStorage } from "../metadata/MetadataStorage.ts";
 import { WhereExpression } from "./WhereExpression.ts";
 
 type Constructor<T> = new (...args: Array<unknown>) => T;
@@ -40,6 +41,7 @@ export class EntityQuery<T extends object> {
     private _limit?: number;
     private _offset?: number;
     private _selectedColumns: Array<string> = ["*"];
+    private _includes: Set<string> = new Set();
     private _hydrate: (row: Record<string, unknown>) => T;
 
     public constructor(
@@ -88,6 +90,11 @@ export class EntityQuery<T extends object> {
         return this;
     }
 
+    public include(relation: StringKeys<T>): this {
+        this._includes.add(relation);
+        return this;
+    }
+
     /**
      * Project specific columns.
      * If a mapper function is provided, we attempt to detect which columns are needed.
@@ -130,9 +137,23 @@ export class EntityQuery<T extends object> {
 
     // ── Terminal methods ───────────────────────────────────────────────────────
 
+    // ── SQL generation ─────────────────────────────────────────────────────────
+
     public async toList(): Promise<Array<T>> {
-        const rows = await this.executeSelect();
-        return rows.map((r) => this._hydrate(r));
+        if (this._includes.size === 0) {
+            const rows = await this.executeSelect();
+            return rows.map((r: Record<string, unknown>) => this._hydrate(r));
+        }
+
+        // Relations case: uses RelationHydrator
+        const { sql, params } = this.buildSQL();
+        const rows = await this.db.query<Record<string, unknown>>(sql, params);
+
+        const { RelationHydrator } = await import("../query/RelationHydrator.ts");
+        return RelationHydrator.hydrate<T>(rows, {
+            includes: this._includes,
+            rootEntityClass: this.EntityClass!
+        });
     }
 
     public async toArray(): Promise<Array<T>> {
@@ -213,36 +234,150 @@ export class EntityQuery<T extends object> {
         return rows[0]?.n ?? 0;
     }
 
-    // ── SQL generation ─────────────────────────────────────────────────────────
-
     private async executeSelect(): Promise<Array<Record<string, unknown>>> {
-        const selectExpr = this._selectedColumns
-            .map((c) => (c === "*" ? c : this.db.quote(c)))
-            .join(", ");
-        const { sql, params } = this.buildSQL(selectExpr);
+        const { sql, params } = this.buildSQL();
         return this.db.query<Record<string, unknown>>(sql, params);
     }
 
-    private buildSQL(selectExpr: string): { sql: string; params: Array<unknown> } {
+    private buildSQL(aggregateExpr?: string): { sql: string; params: Array<unknown> } {
         const params: Array<unknown> = [];
-        let sql = `SELECT ${selectExpr} FROM ${this.db.quote(this.tableName)}`;
+        const isAliased = this._includes.size > 0 && !aggregateExpr;
+        const mainAlias = isAliased ? "t0" : "";
+        const mainMeta = this.EntityClass
+            ? metadataStorage.getEntityByTarget(this.EntityClass)
+            : null;
 
+        let sql = "SELECT ";
+
+        // 1. Column Selection
+        if (aggregateExpr) {
+            sql += aggregateExpr;
+        } else if (!isAliased) {
+            const selectExpr = this._selectedColumns
+                .map((c: string) => (c === "*" ? c : this.db.quote(c)))
+                .join(", ");
+            sql += selectExpr;
+        } else {
+            // Aliased selection: t0.col as t0_col, t1.col as t1_col...
+            const selectParts: Array<string> = [];
+
+            // Main entity columns
+            if (mainMeta) {
+                for (const col of mainMeta.columns) {
+                    selectParts.push(
+                        `${mainAlias}.${this.db.quote(col.columnName)} AS ${mainAlias}_${
+                            col.propertyKey
+                        }`
+                    );
+                }
+            } else {
+                // Fallback for non-entity or untracked
+                selectParts.push(`${mainAlias}.*`);
+            }
+
+            // Included relations columns
+            const includes = Array.from(this._includes);
+            for (let i = 0; i < includes.length; i++) {
+                const relKey = includes[i];
+                const alias = `t${i + 1}`;
+                const relMeta = mainMeta?.relations.find((r) => r.propertyKey === relKey);
+                if (relMeta) {
+                    const targetMeta = metadataStorage.getEntityByTarget(relMeta.target());
+                    if (targetMeta) {
+                        for (const col of targetMeta.columns) {
+                            selectParts.push(
+                                `${alias}.${this.db.quote(col.columnName)} AS ${alias}_${
+                                    col.propertyKey
+                                }`
+                            );
+                        }
+                    } else {
+                        selectParts.push(`${alias}.*`);
+                    }
+                }
+            }
+            sql += selectParts.join(", ");
+        }
+
+        sql += ` FROM ${this.db.quote(this.tableName)}${isAliased ? " t0" : ""}`;
+
+        // 2. Joins
+        if (isAliased && mainMeta) {
+            const includes = Array.from(this._includes);
+            for (let i = 0; i < includes.length; i++) {
+                const relKey = includes[i];
+                const alias = `t${i + 1}`;
+                const relMeta = mainMeta.relations.find((r) => r.propertyKey === relKey);
+                if (relMeta) {
+                    const targetMeta = metadataStorage.getEntityByTarget(relMeta.target());
+                    if (targetMeta) {
+                        if (relMeta.relationType === "many-to-one") {
+                            // User -> Role (authorId -> User.id)
+                            // Here relMeta.foreignKey is 'authorId' on Post
+                            sql += ` LEFT JOIN ${this.db.quote(targetMeta.tableName)} ${alias} ON t0.${this.db.quote(
+                                relMeta.foreignKey
+                            )} = ${alias}.${this.db.quote(targetMeta.columns.find((c: any) => c.isPrimary)?.columnName ?? "id")}`;
+                        } else {
+                            // OneToMany: User -> Posts (User.id -> Post.authorId)
+                            // Here relMeta.foreignKey is 'authorId' on Post
+                            sql += ` LEFT JOIN ${this.db.quote(targetMeta.tableName)} ${alias} ON t0.${this.db.quote(
+                                mainMeta.columns.find((c: any) => c.isPrimary)?.columnName ?? "id"
+                            )} = ${alias}.${this.db.quote(relMeta.foreignKey)}`;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Wheres
         if (this._wheres.length > 0) {
             const parts = this._wheres.map((w) => {
                 params.push(...w.params);
-                return `(${w.sql})`;
+                let whereSql = w.sql;
+                if (isAliased) {
+                    // Primitive support: prefix all columns with t0.
+                    // Note: This is a simple regex and might need refinement for complex cases.
+                    // We assume valid identifiers are quoted or just plain text.
+                    // Since the ORM quotes them, we look for quoted identifiers.
+                    // This is naive but works for our current quote implementation.
+                    whereSql = whereSql
+                        .replace(/`([^`]+)`/g, "t0.`$1`")
+                        .replace(/"([^"]+)"/g, 't0."$1"')
+                        .replace(/\[([^\]]+)\]/g, "t0.[$1]");
+                }
+                return `(${whereSql})`;
             });
             sql += ` WHERE ${parts.join(" AND ")}`;
         }
 
-        // Only add ORDER BY for set-returning queries or explicitly requested
+        // 4. Order By
         if (this._orders.length > 0) {
-            const orderParts = this._orders.map((o) => `${this.db.quote(o.field)} ${o.dir}`);
+            const orderParts = this._orders.map((o) => {
+                const fieldSql = isAliased
+                    ? `${mainAlias}.${this.db.quote(o.field)}`
+                    : this.db.quote(o.field);
+                return `${fieldSql} ${o.dir}`;
+            });
             sql += ` ORDER BY ${orderParts.join(", ")}`;
         }
 
-        if (this._limit !== undefined) sql += ` LIMIT ${this._limit}`;
-        if (this._offset !== undefined) sql += ` OFFSET ${this._offset}`;
+        // 5. Limit / Offset
+        if (this._limit !== undefined) {
+            if (this.db.dialect === "mssql") {
+                if (this._orders.length === 0) sql += " ORDER BY (SELECT NULL)";
+                sql += ` OFFSET ${this._offset ?? 0} ROWS FETCH NEXT ${this._limit} ROWS ONLY`;
+            } else {
+                sql += ` LIMIT ${this._limit}`;
+                if (this._offset !== undefined) sql += ` OFFSET ${this._offset}`;
+            }
+        } else if (this._offset !== undefined) {
+            if (this.db.dialect === "mssql") {
+                if (this._orders.length === 0) sql += " ORDER BY (SELECT NULL)";
+                sql += ` OFFSET ${this._offset} ROWS`;
+            } else {
+                sql += ` OFFSET ${this._offset}`;
+            }
+        }
 
         return { sql, params };
     }
@@ -254,6 +389,7 @@ export class EntityQuery<T extends object> {
         q["_limit"] = this._limit;
         q["_offset"] = this._offset;
         q["_selectedColumns"] = [...this._selectedColumns];
+        q["_includes"] = new Set(this._includes);
         return q;
     }
 }

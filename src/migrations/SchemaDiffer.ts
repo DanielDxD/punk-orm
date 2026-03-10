@@ -81,8 +81,6 @@ export class SchemaDiffer {
 
         // ── New tables ──────────────────────────────────────────────────────────
         for (const meta of d.tablesToCreate) {
-            const cols = meta.columns.map((c) => this.schemaBuilder.buildColumnDef(c));
-
             // Append FOREIGN KEY constraints from ManyToOne relations
             const fkLines: Array<string> = [];
             for (const rel of meta.relations) {
@@ -103,12 +101,25 @@ export class SchemaDiffer {
                 }
             }
 
-            const allDefs = [...cols, ...fkLines];
-            const up = `CREATE TABLE IF NOT EXISTS ${this.db.quote(
-                meta.tableName
-            )} (\n    ${allDefs.join(",\n    ")}\n  )`;
-            const down = `DROP TABLE IF EXISTS ${this.db.quote(meta.tableName)}`;
-            upStatements.push(up);
+            // We temporarily override columns just for this specific SQL generation if we wanted custom logic,
+            // but buildCreateTableSql expects EntityMetadata.
+            // Since SchemaBuilder already handles dialects, we use it.
+            const up = this.schemaBuilder
+                .buildCreateTableSql(meta)
+                .replace("(\n  ", "(\n    ")
+                .replace(",\n  ", ",\n    ");
+
+            // If there are FKs, we need to inject them into the column list before the closing paren
+            let finalUp = up;
+            if (fkLines.length > 0) {
+                const lastParenIndex = up.lastIndexOf(")");
+                finalUp = up.slice(0, lastParenIndex).trim();
+                if (finalUp.endsWith(",")) finalUp = finalUp.slice(0, -1);
+                finalUp += `,\n    ${fkLines.join(",\n    ")}\n  )`;
+            }
+
+            const down = this.schemaBuilder.buildDropTableSql(meta);
+            upStatements.push(finalUp);
             // Reverse order for down so FK references are dropped first
             downStatements.unshift(down);
         }

@@ -8,27 +8,37 @@ export class SchemaBuilder {
     public constructor(private readonly db: IDatabaseAdapter) {}
 
     public async createTable(meta: EntityMetadata): Promise<void> {
+        await this.db.run(this.buildCreateTableSql(meta));
+    }
+
+    public buildCreateTableSql(meta: EntityMetadata): string {
         const columnDefs = meta.columns.map((col) => this.buildColumnDef(col));
-        let sql: string;
 
         switch (this.db.dialect) {
             case "mssql":
-                sql = `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='${
+                return `IF OBJECT_ID('${meta.tableName}', 'U') IS NULL\nCREATE TABLE ${this.db.quote(
                     meta.tableName
-                }' AND xtype='U')\nCREATE TABLE ${this.db.quote(meta.tableName)} (\n  ${columnDefs.join(
-                    ",\n  "
-                )}\n);`;
-                break;
+                )} (\n  ${columnDefs.join(",\n  ")}\n);`;
             case "postgres":
             case "mysql":
             case "sqlite":
             default:
-                sql = `CREATE TABLE IF NOT EXISTS ${this.db.quote(
+                return `CREATE TABLE IF NOT EXISTS ${this.db.quote(
                     meta.tableName
                 )} (\n  ${columnDefs.join(",\n  ")}\n);`;
-                break;
         }
-        await this.db.run(sql);
+    }
+
+    public buildDropTableSql(meta: EntityMetadata | string): string {
+        const tableName = typeof meta === "string" ? meta : meta.tableName;
+        switch (this.db.dialect) {
+            case "mssql":
+                return `IF OBJECT_ID('${tableName}', 'U') IS NOT NULL DROP TABLE ${this.db.quote(
+                    tableName
+                )};`;
+            default:
+                return `DROP TABLE IF EXISTS ${this.db.quote(tableName)};`;
+        }
     }
 
     public buildColumnDef(col: ColumnMetadata): string {

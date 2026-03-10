@@ -30,6 +30,16 @@ class MetadataStorage {
         return Array.from(this.entities.values());
     }
 
+    public getEntityByTarget(
+        target: new (...args: Array<unknown>) => unknown
+    ): EntityMetadata | undefined {
+        return this.entities.get(target);
+    }
+
+    public getEntityByTableName(tableName: string): EntityMetadata | undefined {
+        return this.getAllEntities().find((e) => e.tableName === tableName);
+    }
+
     // ── Columns ────────────────────────────────────────────────────────────────
 
     public registerColumn(

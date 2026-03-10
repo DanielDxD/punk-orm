@@ -53,7 +53,7 @@ export class Post {
     @Column({ type: "integer", default: 0 })
     public views: number;
 
-    @Column({ type: "text" })
+    @Column({ type: "uuid" })
     public authorId: string;
 
     @ManyToOne(() => User, { foreignKey: "authorId" })
@@ -78,8 +78,9 @@ async function demo() {
 
     const user = await context.users
         .where((c) => c.eq("email", "example@example.com"))
-        .select((u) => ({ id: u.id, name: u.name }))
         .firstOrDefault();
+
+    context.close();
 
     console.log(user);
 }

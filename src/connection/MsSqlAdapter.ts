@@ -12,10 +12,33 @@ export class MsSqlAdapter implements IDatabaseAdapter {
     private pool: any;
 
     /**
-     * @param config Connection configuration for mssql
+     * @param config Connection configuration for mssql or a connection string
      */
     public constructor(config: any) {
-        this.config = config;
+        if (typeof config === "string") {
+            this.config = this.parseConnectionString(config);
+        } else {
+            this.config = config;
+        }
+    }
+
+    private parseConnectionString(connectionString: string): any {
+        try {
+            const url = new URL(connectionString);
+            return {
+                server: url.hostname,
+                port: url.port ? parseInt(url.port) : 1433,
+                user: url.username,
+                password: url.password,
+                database: url.pathname.slice(1),
+                options: {
+                    encrypt: true, // Default to true for many cloud providers
+                    trustServerCertificate: true // Often needed for local dev
+                }
+            };
+        } catch {
+            return { uri: connectionString };
+        }
     }
 
     private async connect() {
