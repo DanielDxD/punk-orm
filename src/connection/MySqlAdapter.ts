@@ -1,0 +1,71 @@
+import type { DatabaseDialect, IDatabaseAdapter } from "./DatabaseAdapter.ts";
+
+/**
+ * MySQL / MariaDB adapter using `mysql2/promise`.
+ *
+ * Note: Requires `mysql2` package to be installed.
+ */
+export class MySqlAdapter implements IDatabaseAdapter {
+    public readonly dialect: DatabaseDialect = "mysql";
+    private options: any;
+    private connection: any;
+
+    /**
+     * @param options Connection options for mysql2
+     */
+    public constructor(options: any) {
+        this.options = options;
+    }
+
+    public async run(sql: string, params: Array<unknown> = []): Promise<void> {
+        await this.ensureConnected();
+        await this.connection.execute(sql, params);
+    }
+
+    public async query<T = Record<string, unknown>>(
+        sql: string,
+        params: Array<unknown> = []
+    ): Promise<Array<T>> {
+        await this.ensureConnected();
+        const [rows] = await this.connection.execute(sql, params);
+        return rows as Array<T>;
+    }
+
+    public async transaction(fn: () => Promise<void>): Promise<void> {
+        await this.ensureConnected();
+        const conn = await this.connection.getConnection();
+        await conn.beginTransaction();
+        const originalConn = this.connection;
+        this.connection = conn; // Use the specific connection for the transaction
+        try {
+            await fn();
+            await conn.commit();
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        } finally {
+            this.connection = originalConn;
+            conn.release();
+        }
+    }
+
+    public close(): void {
+        if (this.connection && typeof this.connection.end === "function") {
+            this.connection.end();
+        }
+    }
+
+    private async ensureConnected() {
+        if (!this.connection) {
+            try {
+                const mysql = await import("mysql2/promise" as any);
+                this.connection = mysql.createPool(this.options);
+            } catch (err) {
+                throw new Error(
+                    "MySQL driver 'mysql2' not found. Please install it with 'bun add mysql2'.",
+                    { cause: err }
+                );
+            }
+        }
+    }
+}

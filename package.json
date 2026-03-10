@@ -1,0 +1,48 @@
+{
+    "name": "@danielgl/punk-orm",
+    "version": "1.0.0",
+    "module": "src/index.ts",
+    "type": "module",
+    "bin": {
+        "punk": "./bin/punk.ts"
+    },
+    "scripts": {
+        "dev": "bun run examples/basic.ts",
+        "test": "bun test",
+        "build": "bun build src/index.ts --outdir dist --target bun",
+        "punk": "bun bin/punk.ts",
+        "lint": "eslint \"{src,tests,example}/**/*.ts\"",
+        "lint:fix": "eslint \"{src,tests,example}/**/*.ts\" --fix",
+        "format:check": "prettier --check \"{src,tests,example}/**/*.ts\"",
+        "format": "prettier --write \"{src,tests,example}/**/*.ts\"",
+        "prepare": "husky"
+    },
+    "dependencies": {
+        "reflect-metadata": "^0.2.2"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/bun": "latest",
+        "@typescript-eslint/eslint-plugin": "^8.56.1",
+        "@typescript-eslint/parser": "^8.56.1",
+        "eslint": "^10.0.2",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-prettier": "^5.5.5",
+        "husky": "^9.1.7",
+        "lint-staged": "^16.3.2",
+        "typescript-eslint": "^8.56.1"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "lint-staged": {
+        "src/**/*.ts": [
+            "eslint --fix",
+            "prettier --write"
+        ],
+        "tests/**/*.ts": [
+            "eslint --fix",
+            "prettier --write"
+        ]
+    }
+}
