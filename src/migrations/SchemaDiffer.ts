@@ -143,19 +143,52 @@ export class SchemaDiffer {
     // ── Private helpers ────────────────────────────────────────────────────────
 
     private async tableExists(tableName: string): Promise<boolean> {
-        const rows = await this.db.query<{ name: string }>(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-            [tableName]
-        );
+        let sql: string;
+        switch (this.db.dialect) {
+            case "postgres":
+            case "mysql":
+            case "mssql":
+                sql = "SELECT 1 FROM information_schema.tables WHERE table_name = ?";
+                break;
+            case "sqlite":
+            default:
+                sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
+                break;
+        }
+
+        const rows = await this.db.query(sql, [tableName]);
         return rows.length > 0;
     }
 
     /** Returns a Map of columnName → ColumnInfo for columns present in the DB. */
     private async getExistingColumns(tableName: string): Promise<Map<string, ColumnInfo>> {
-        const cols = await this.db.query<ColumnInfo>(`PRAGMA table_info(${tableName})`);
         const map = new Map<string, ColumnInfo>();
-        for (const c of cols) {
-            map.set(c.name, c);
+
+        if (this.db.dialect === "sqlite") {
+            const cols = await this.db.query<any>(`PRAGMA table_info(${tableName})`);
+            for (const c of cols) {
+                map.set(c.name, {
+                    name: c.name,
+                    type: c.type,
+                    notnull: c.notnull,
+                    dflt_value: c.dflt_value,
+                    pk: c.pk
+                });
+            }
+        } else {
+            // Postgres, MySQL, MSSQL use information_schema
+            const sql =
+                "SELECT column_name as name FROM information_schema.columns WHERE table_name = ?";
+            const cols = await this.db.query<{ name: string }>(sql, [tableName]);
+            for (const c of cols) {
+                map.set(c.name, {
+                    name: c.name,
+                    type: "", // Not strictly needed for basic name-based diff
+                    notnull: 0,
+                    dflt_value: null,
+                    pk: 0
+                });
+            }
         }
         return map;
     }
