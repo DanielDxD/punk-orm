@@ -23,22 +23,45 @@ export class MsSqlAdapter implements IDatabaseAdapter {
     }
 
     private parseConnectionString(connectionString: string): any {
-        try {
-            const url = new URL(connectionString);
+        // Regex to match mssql://user:pass@host:port/database
+        // Uses greedy matching for the user:pass part to handle @ and # in passwords
+        const regex = /^(\w+):\/\/(.+@)?([^/?#:]+)(?::(\d+))?(\/[^?#]*)?/;
+        const match = connectionString.match(regex);
+
+        if (match) {
+            // protocol = match[1]
+            let user = "";
+            let password = "";
+            const auth = match[2]; // "user:pass@"
+            if (auth) {
+                const innerAuth = auth.slice(0, -1);
+                const colonIndex = innerAuth.indexOf(":");
+                if (colonIndex !== -1) {
+                    user = innerAuth.slice(0, colonIndex);
+                    password = innerAuth.slice(colonIndex + 1);
+                } else {
+                    user = innerAuth;
+                }
+            }
+
+            const server = match[3];
+            const port = match[4] ? parseInt(match[4]) : 1433;
+            const database = match[5] ? match[5].slice(1) : "";
+
             return {
-                server: url.hostname,
-                port: url.port ? parseInt(url.port) : 1433,
-                user: url.username,
-                password: url.password,
-                database: url.pathname.slice(1),
+                server,
+                port,
+                user: decodeURIComponent(user),
+                password: decodeURIComponent(password),
+                database: decodeURIComponent(database),
                 options: {
-                    encrypt: true, // Default to true for many cloud providers
-                    trustServerCertificate: true // Often needed for local dev
+                    encrypt: true,
+                    trustServerCertificate: true
                 }
             };
-        } catch {
-            return { uri: connectionString };
         }
+
+        return connectionString;
     }
 
     private async connect() {
@@ -99,23 +122,42 @@ export class MsSqlAdapter implements IDatabaseAdapter {
     }
 
     public async ensureDatabaseExists(): Promise<void> {
-        const dbName = this.config.database;
+        let dbName = this.config.database;
+
+        // If it's a string, try to extract database name if it looks like a URL
+        if (typeof this.config === "string") {
+            try {
+                const match = this.config.match(/\/([^/?#]+)([?#]|$)/);
+                if (match) dbName = match[1];
+            } catch {
+                /* ignore */
+            }
+        }
+
         if (!dbName) return;
 
         await this.ensureConnected();
         const mssql = await import("mssql" as any);
         // Connect to master database to check/create target
-        const masterConfig = { ...this.config, database: "master" };
-        const pool = new mssql.ConnectionPool(masterConfig);
-        await pool.connect();
+        let masterPool: any;
+        if (typeof this.config === "string") {
+            // Very naive replacement for URL-style strings
+            const masterUrl = this.config.replace(`/${dbName}`, "/master");
+            masterPool = new mssql.ConnectionPool(masterUrl);
+        } else {
+            const masterConfig = { ...this.config, database: "master" };
+            masterPool = new mssql.ConnectionPool(masterConfig);
+        }
+
+        await masterPool.connect();
 
         try {
-            await pool.request().query(
+            await masterPool.request().query(
                 `IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '${dbName}')
                  CREATE DATABASE [${dbName}]`
             );
         } finally {
-            await pool.close();
+            await masterPool.close();
         }
     }
 

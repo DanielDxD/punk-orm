@@ -22,20 +22,38 @@ export class MySqlAdapter implements IDatabaseAdapter {
     }
 
     private parseConnectionString(connectionString: string): any {
-        try {
-            const url = new URL(connectionString);
+        const regex = /^(\w+):\/\/(.+@)?([^/?#:]+)(?::(\d+))?(\/[^?#]*)?/;
+        const match = connectionString.match(regex);
+
+        if (match) {
+            let user = "";
+            let password = "";
+            const auth = match[2];
+            if (auth) {
+                const innerAuth = auth.slice(0, -1);
+                const colonIndex = innerAuth.indexOf(":");
+                if (colonIndex !== -1) {
+                    user = innerAuth.slice(0, colonIndex);
+                    password = innerAuth.slice(colonIndex + 1);
+                } else {
+                    user = innerAuth;
+                }
+            }
+
+            const host = match[3];
+            const port = match[4] ? parseInt(match[4]) : 3306;
+            const database = match[5] ? match[5].slice(1) : "";
+
             return {
-                host: url.hostname,
-                port: url.port ? parseInt(url.port) : 3306,
-                user: url.username,
-                password: url.password,
-                database: url.pathname.slice(1)
+                host,
+                port,
+                user: decodeURIComponent(user),
+                password: decodeURIComponent(password),
+                database: decodeURIComponent(database)
             };
-        } catch {
-            // Fallback for non-URL strings if needed, or just let mysql2 handle it if possible.
-            // But here we need to extract 'database' for ensureDatabaseExists.
-            return { uri: connectionString };
         }
+
+        return connectionString;
     }
 
     public async run(sql: string, params: Array<unknown> = []): Promise<void> {
@@ -81,15 +99,31 @@ export class MySqlAdapter implements IDatabaseAdapter {
     }
 
     public async ensureDatabaseExists(): Promise<void> {
-        const dbName = this.options.database;
+        let dbName = this.options.database;
+
+        if (typeof this.options === "string") {
+            try {
+                const match = this.options.match(/\/([^/?#]+)([?#]|$)/);
+                if (match) dbName = match[1];
+            } catch {
+                /* ignore */
+            }
+        }
+
         if (!dbName) return;
 
         const mysql = await import("mysql2/promise" as any);
         // Connect without a database to check/create it
-        const connection = await mysql.createConnection({
-            ...this.options,
-            database: undefined
-        });
+        let connection: any;
+        if (typeof this.options === "string") {
+            const masterUrl = this.options.replace(`/${dbName}`, "/");
+            connection = await mysql.createConnection(masterUrl);
+        } else {
+            connection = await mysql.createConnection({
+                ...this.options,
+                database: undefined
+            });
+        }
 
         try {
             await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);

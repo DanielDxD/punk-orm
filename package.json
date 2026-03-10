@@ -1,6 +1,6 @@
 {
     "name": "@danielgl/punk-orm",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "description": "An Entity Framework-inspired ORM for Bun supporting SQLite, Postgres, MySQL and MSSQL.",
     "author": "Daniel Lopes",
     "license": "MIT",

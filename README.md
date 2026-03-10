@@ -27,6 +27,61 @@ Add to your `tsconfig.json`:
 
 ---
 
+## 🗄️ Supported Databases
+
+PunkORM supports multiple database engines. Choose the appropriate adapter for your project:
+
+### SQLite
+
+Uses Bun's native `bun:sqlite` driver. No external dependencies required.
+
+```ts
+import { BunSQLiteAdapter } from "@danielgl/punk-orm";
+const adapter = new BunSQLiteAdapter("./app.db");
+```
+
+### PostgreSQL
+
+Requires `postgres` (postgres.js).
+
+```ts
+import { PostgresAdapter } from "@danielgl/punk-orm";
+// URL Format: postgres://user:password@host:port/database
+const adapter = new PostgresAdapter("postgres://postgres:pass@localhost:5432/mydb");
+```
+
+### MySQL / MariaDB
+
+Requires `mysql2`.
+
+```ts
+import { MySqlAdapter } from "@danielgl/punk-orm";
+// URL Format: mysql://user:password@host:port/database
+const adapter = new MySqlAdapter("mysql://root:pass@localhost:3306/mydb");
+```
+
+### MSSQL (SQL Server)
+
+Requires `mssql` (tedious). Supports both URL and traditional connection strings.
+
+```ts
+import { MsSqlAdapter } from "@danielgl/punk-orm";
+
+// 1. URL Format (Recommended)
+// mssql://user:password@host:port/database
+const adapter1 = new MsSqlAdapter("mssql://sa:password@localhost/master");
+
+// 2. Traditional Connection String
+const adapter2 = new MsSqlAdapter(
+    "Server=localhost;Database=master;User Id=sa;Password=password;TrustServerCertificate=True;"
+);
+```
+
+> [!TIP]
+> **Special Characters**: Connection strings now robustly handle passwords containing `@`, `#`, or other special characters without needing manual URL encoding.
+
+---
+
 ## Quick Start
 
 ### 1. Define Entities

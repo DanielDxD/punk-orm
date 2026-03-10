@@ -58,13 +58,20 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
 
     public async ensureDatabaseExists(): Promise<void> {
-        const url = new URL(this.connectionString);
-        const targetDb = url.pathname.slice(1);
+        const regex = /^(\w+):\/\/(.+@)?([^/?#:]+)(?::(\d+))?(\/[^?#]*)?/;
+        const match = this.connectionString.match(regex);
+        if (!match) return;
+
+        const targetDb = match[5] ? match[5].slice(1) : "";
         if (!targetDb || targetDb === "postgres") return;
 
         // Connect to maintenance database 'postgres' to check/create the target db
-        url.pathname = "/postgres";
-        const maintenanceString = url.toString();
+        // We rebuild the maintenance string safely
+        const protocol = match[1];
+        const auth = match[2] || "";
+        const host = match[3];
+        const port = match[4] ? `:${match[4]}` : "";
+        const maintenanceString = `${protocol}://${auth}${host}${port}/postgres`;
 
         const { default: postgres } = await import("postgres" as any);
         const sql = postgres(maintenanceString, { ...this.options, max: 1 });
